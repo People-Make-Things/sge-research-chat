@@ -152,6 +152,8 @@ def saved_article_paths(settings: Settings) -> List[Path]:
 def backfill_saved_articles(
     settings: Settings,
     limit: Optional[int] = None,
+    batch_size: int = 128,
+    delete_existing: bool = False,
     progress_callback: Optional[Callable[[str], None]] = None,
 ) -> IngestStats:
     """Upsert already-normalized article JSON into the configured vector store."""
@@ -163,6 +165,14 @@ def backfill_saved_articles(
     embedding_provider = make_embedding_provider(settings)
     vector_store = make_vector_store(settings, embedding_provider)
     stats = IngestStats(discovered_urls=len(paths))
+    pending_chunks = []
+
+    def flush() -> None:
+        nonlocal pending_chunks
+        if not pending_chunks:
+            return
+        stats.chunks_indexed += vector_store.upsert_chunks(pending_chunks)
+        pending_chunks = []
 
     for index, path in enumerate(paths, start=1):
         try:
@@ -175,8 +185,11 @@ def backfill_saved_articles(
             if not chunks:
                 stats.skipped_articles += 1
                 continue
-            vector_store.delete_article(article.slug)
-            stats.chunks_indexed += vector_store.upsert_chunks(chunks)
+            if delete_existing:
+                vector_store.delete_article(article.slug)
+            pending_chunks.extend(chunks)
+            if len(pending_chunks) >= batch_size:
+                flush()
             stats.indexed_articles += 1
         except Exception as exc:
             stats.failed_urls += 1
@@ -194,5 +207,6 @@ def backfill_saved_articles(
                 )
             )
 
+    flush()
     stats.collection_count = vector_store.count()
     return stats

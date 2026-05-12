@@ -100,6 +100,8 @@ def query(
 @app.command("backfill-vectors")
 def backfill_vectors(
     limit: Optional[int] = typer.Option(None, "--limit", "-n", help="Limit saved article JSON files to upsert."),
+    batch_size: int = typer.Option(128, "--batch-size", help="Number of chunks to embed/upsert per batch."),
+    delete_existing: bool = typer.Option(False, "--delete-existing", help="Delete existing vectors by article slug before upsert."),
     embedding_provider: Optional[str] = typer.Option(None, "--embedding-provider", help="openai or hash."),
     vectorstore: Optional[str] = typer.Option(None, "--vectorstore", help="chroma or upstash."),
 ) -> None:
@@ -111,7 +113,13 @@ def backfill_vectors(
     if vectorstore:
         settings.vectorstore = vectorstore  # type: ignore[assignment]
     try:
-        stats = backfill_saved_articles(settings, limit=limit, progress_callback=typer.echo)
+        stats = backfill_saved_articles(
+            settings,
+            limit=limit,
+            batch_size=batch_size,
+            delete_existing=delete_existing,
+            progress_callback=typer.echo,
+        )
     except SgeRagError as exc:
         typer.echo("Backfill failed: %s" % exc, err=True)
         raise typer.Exit(code=1) from exc

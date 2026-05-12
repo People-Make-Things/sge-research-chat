@@ -1,3 +1,5 @@
+import os
+
 import httpx
 import respx
 
@@ -25,7 +27,10 @@ def sample_chunk() -> ArticleChunk:
 
 
 def upstash_settings() -> Settings:
+    os.environ["UPSTASH_VECTOR_REST_URL"] = "https://vector.example.com"
+    os.environ["UPSTASH_VECTOR_REST_TOKEN"] = "token"
     return Settings(
+        _env_file=None,
         embedding_provider="hash",
         vectorstore="upstash",
         upstash_vector_rest_url="https://vector.example.com",
